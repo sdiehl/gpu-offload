@@ -1,6 +1,6 @@
 # GPU Offload Tutorial
 
-This minimal project demonstrates how to compile MLIR code to PTX and execute it on NVIDIA GPUs using Python.
+This minimal project demonstrates how to compile MLIR code to PTX and execute it on an NVIDIA GPU using Python MLIR bindings and Python CUDA bindings.
 
 - `compile.py`: Functions for compiling MLIR to PTX
 - `run.py`: Functions for running PTX kernels on CUDA GPUs
@@ -58,8 +58,8 @@ cleanup_cuda(context)
 
 ```bash
 poetry run python example.py
-poetry run python mlir_example.py
-poetry run python ptx_example.py
+poetry run python example_mlir.py
+poetry run python example_ptx.py
 ```
 
 
