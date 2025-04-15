@@ -25,8 +25,9 @@ jobs:
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
         add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main"
         apt-get update
-        apt-get install -y llvm-20 llvm-20-dev llvm-20-tools
+        apt-get install -y llvm-20 llvm-20-dev llvm-20-tools mlir-20-tools
         ln -s /usr/bin/llc-20 /usr/bin/llc
+        ln -s /usr/bin/mlir-translate-20 /usr/bin/mlir-translate
 
     - name: Install Poetry
       run: |
