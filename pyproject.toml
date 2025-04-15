@@ -7,7 +7,7 @@ readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.10"
 mlir-python-bindings = { version = "21.0.0.2025031701+4fde8c34 ", source = "mlir-wheels"}
 pyyaml = "^6.0.2"
 numpy = "^2.2.4"
