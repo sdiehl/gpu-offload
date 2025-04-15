@@ -21,12 +21,12 @@ jobs:
       run: |
         apt-get update
         apt-get install -y wget gnupg software-properties-common python3.10 python3.10-dev python3.10-venv python3-pip git
-        # Install LLVM 21 tools
+        # Install LLVM 20 tools
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-        add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-21 main"
+        add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main"
         apt-get update
-        apt-get install -y llvm-21 llvm-21-dev llvm-21-tools
-        ln -s /usr/bin/llc-21 /usr/bin/llc
+        apt-get install -y llvm-20 llvm-20-dev llvm-20-tools
+        ln -s /usr/bin/llc-20 /usr/bin/llc
         
     - name: Install Poetry
       run: |
