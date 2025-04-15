@@ -18,8 +18,7 @@ This minimal project demonstrates how to compile MLIR code to PTX and execute it
 ## Installation
 
 ```bash
-# Install from pyproject.toml
-pip install .
+poetry install
 ```
 
 ## Usage
@@ -52,7 +51,7 @@ input_data = np.random.randn(10, 10).astype(np.float32)
 output_data = np.zeros((10, 10), dtype=np.float32)
 
 # Run kernel
-outputs = run_ptx_kernel(
+run_ptx_kernel(
     ptx_code,
     "square_kernel",
     ["ptr:in", "ptr:out"],
@@ -69,5 +68,5 @@ cleanup_cuda(context)
 ## Running the Example
 
 ```bash
-python example.py
-``` 
+poetry run python example.py
+```

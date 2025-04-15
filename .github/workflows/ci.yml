@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  run-example:
+    runs-on: ubuntu-latest
+    container:
+      image: nvidia/cuda:12.1.0-devel-ubuntu22.04
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install system dependencies
+      run: |
+        apt-get update
+        apt-get install -y wget gnupg software-properties-common python3.12 python3.12-dev python3.12-venv python3-pip git
+        # Install LLVM 21 tools
+        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+        add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-21 main"
+        apt-get update
+        apt-get install -y llvm-21 llvm-21-dev llvm-21-tools
+        ln -s /usr/bin/llc-21 /usr/bin/llc
+        
+    - name: Install Poetry
+      run: |
+        python3.12 -m pip install pip --upgrade
+        python3.12 -m pip install poetry
+        poetry --version
+        
+    - name: Install dependencies
+      run: |
+        poetry install
+        
+    - name: Check CUDA environment
+      run: |
+        echo "CUDA version:"
+        nvcc --version || echo "nvcc not available in PATH, but CUDA libraries should be present"
+        echo "CUDA libraries:"
+        ls -la /usr/local/cuda/lib64 || echo "CUDA libraries not found in standard location"
+        echo "LD_LIBRARY_PATH:"
+        echo $LD_LIBRARY_PATH
