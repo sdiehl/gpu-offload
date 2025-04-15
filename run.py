@@ -243,7 +243,7 @@ def cleanup_cuda(context):
 # --- Example Usage ---
 if __name__ == "__main__":
 
-    # Example PTX code for vector addition (replace with your actual PTX)
+    # Example PTX code for vector addition
     vector_add_ptx = """
     .version 7.0 // Adjust version/target as needed
     .target sm_70

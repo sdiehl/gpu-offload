@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-example:
+  ci:
     runs-on: ubuntu-latest
     container:
       image: nvidia/cuda:12.1.0-devel-ubuntu22.04
@@ -20,7 +20,7 @@ jobs:
     - name: Install system dependencies
       run: |
         apt-get update
-        apt-get install -y wget gnupg software-properties-common python3.12 python3.12-dev python3.12-venv python3-pip git
+        apt-get install -y wget gnupg software-properties-common python3.10 python3.10-dev python3.10-venv python3-pip git
         # Install LLVM 21 tools
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
         add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-21 main"
@@ -30,13 +30,14 @@ jobs:
         
     - name: Install Poetry
       run: |
-        python3.12 -m pip install pip --upgrade
-        python3.12 -m pip install poetry
+        python3.10 -m pip install pip --upgrade
+        python3.10 -m pip install poetry
         poetry --version
         
     - name: Install dependencies
       run: |
-        poetry install
+        poetry env use python3.10
+        poetry install --with gpu
         
     - name: Check CUDA environment
       run: |
