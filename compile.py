@@ -4,14 +4,14 @@ from mlir.ir import Context, Module
 from mlir.passmanager import PassManager
 
 
-def compile_mlir_to_ptx(mlir_module_str, chip_type="sm_90"):
+def compile_mlir_to_ptx(mlir_module_str : str, chip_type="sm_90"):
     """Compiles MLIR module string to PTX code."""
     with Context() as ctx:
         # Parse the input module
         module = Module.parse(mlir_module_str)
 
         # Apply GPU compilation pipeline
-        module, gpu_module = apply_gpu_pipeline(ctx, module, chip_type)
+        module, gpu_module = apply_gpu_pipeline(module, chip_type)
 
         # Generate PTX from the GPU module
         ptx = generate_ptx(str(gpu_module), chip_type)
@@ -19,9 +19,10 @@ def compile_mlir_to_ptx(mlir_module_str, chip_type="sm_90"):
     return ptx
 
 
-def apply_gpu_pipeline(ctx, module, chip_type="sm_90"):
+def apply_gpu_pipeline(module, chip_type="sm_90"):
     """Applies the GPU compilation pipeline to the MLIR module."""
     pm = PassManager()
+    pm.enable_ir_printing(print_after_change=True)
     pm.add("canonicalize")
     pm.add(
         "one-shot-bufferize{ bufferize-function-boundaries function-boundary-type-conversion=identity-layout-map }"
