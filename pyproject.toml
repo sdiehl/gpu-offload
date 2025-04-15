@@ -17,3 +17,8 @@ numpy = "^2.2.4"
 name = "mlir-wheels"
 url = "https://github.com/makslevental/mlir-wheels/releases/expanded_assets/latest"
 priority = "supplemental"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.11.5"
+black = "^25.1.0"
+

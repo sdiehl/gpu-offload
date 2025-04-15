@@ -86,6 +86,19 @@ def run_ptx_kernel(
     grid_dim: tuple[int, ...],
     block_dim: tuple[int, ...],
 ):
+    """Runs a PTX kernel on the GPU.
+
+    Args:
+        ptx_code: String containing PTX code
+        kernel_name: Name of the kernel function to call
+        arg_types: List of type strings for kernel arguments (e.g., ["ptr:in", "ptr:out", "int32"])
+        *args: Kernel arguments (numpy arrays or scalar values)
+        grid_dim: Grid dimensions as tuple (e.g., (8, 1, 1))
+        block_dim: Block dimensions as tuple (e.g., (128, 1, 1))
+
+    Returns:
+        List of output arrays that were modified by the kernel
+    """
     module = None
     gpu_allocations = []  # Stores (gpu_ptr, host_array_for_output) for cleanup/copyback
     output_arrays = []  # References to host arrays that need updating
