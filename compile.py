@@ -4,9 +4,9 @@ from mlir.ir import Context, Module
 from mlir.passmanager import PassManager
 
 
-def compile_mlir_to_ptx(mlir_module_str : str, chip_type="sm_90"):
+def compile_mlir_to_ptx(mlir_module_str: str, chip_type="sm_90"):
     """Compiles MLIR module string to PTX code."""
-    with Context() as ctx:
+    with Context():
         # Parse the input module
         module = Module.parse(mlir_module_str)
 

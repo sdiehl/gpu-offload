@@ -12,11 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: nvidia/cuda:12.1.0-devel-ubuntu22.04
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Install system dependencies
       run: |
         apt-get update
@@ -27,18 +27,18 @@ jobs:
         apt-get update
         apt-get install -y llvm-20 llvm-20-dev llvm-20-tools
         ln -s /usr/bin/llc-20 /usr/bin/llc
-        
+
     - name: Install Poetry
       run: |
         python3.10 -m pip install pip --upgrade
         python3.10 -m pip install poetry
         poetry --version
-        
+
     - name: Install dependencies
       run: |
         poetry env use python3.10
         poetry install --with gpu
-        
+
     - name: Check CUDA environment
       run: |
         echo "CUDA version:"
@@ -47,3 +47,7 @@ jobs:
         ls -la /usr/local/cuda/lib64 || echo "CUDA libraries not found in standard location"
         echo "LD_LIBRARY_PATH:"
         echo $LD_LIBRARY_PATH
+
+    - name: Run MLIR Example
+      run: |
+        poetry run python mlir_example.py
