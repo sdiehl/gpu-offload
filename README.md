@@ -89,9 +89,9 @@ Start MLIR module.
 
 ```mlir
 module {
-  func.func @square(%arg0: memref<10x10xf32>, %arg1: memref<10x10xf32>) -> memref<10x10xf32> {
-    linalg.square ins(%arg0 : memref<10x10xf32>) outs(%arg1 : memref<10x10xf32>)
-    return %arg1 : memref<10x10xf32>
+  func.func @square(%input: tensor<10x10xf32>, %output: tensor<10x10xf32>) -> tensor<10x10xf32> { 
+    %x0 = linalg.square ins(%input : tensor<10x10xf32>) outs(%output : tensor<10x10xf32>) -> tensor<10x10xf32>
+    return %x0 : tensor<10x10xf32>
   }
 }
 ```
