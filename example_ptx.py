@@ -1,6 +1,8 @@
-import math
 import numpy as np
-from run import setup_cuda, run_ptx_kernel, cleanup_cuda, CudaError
+import ctypes
+from run import setup_cuda, run_ptx_kernel, cleanup_cuda
+from helper_cuda import checkCudaErrors
+import cuda.cuda as cu  # type: ignore
 
 # Example PTX code for vector addition
 vector_add_ptx = open("example.ptx").read()
@@ -8,53 +10,72 @@ vector_add_ptx = open("example.ptx").read()
 if __name__ == "__main__":
     # Prepare data
     n = 10000
-    a_host = np.random.randn(n).astype(np.float32)
-    b_host = np.random.randn(n).astype(np.float32)
-    c_host = np.empty_like(a_host)  # Output array
-
-    print(f"Input array size: {n}")
     cuda_context = None  # Ensure cleanup happens even if setup fails
 
     try:
         # --- Setup ---
         cuda_context = setup_cuda()
 
-        # --- Define kernel signature and dimensions ---
-        arg_signature = ["ptr:in", "ptr:in", "ptr:out", "int32"]
-        threads_per_block = 128
-        blocks_per_grid = math.ceil(n / threads_per_block)
+        # Allocate memory normally - we'll use Driver API only
+        h_A = np.random.rand(n).astype(dtype=np.float32)
+        h_B = np.random.rand(n).astype(dtype=np.float32)
+        h_C = np.zeros(n, dtype=np.float32)
+        nbytes = n * np.dtype(np.float32).itemsize
 
-        # --- Run ---
+        # --- Define kernel dimensions ---
+        threadsPerBlock = 128
+        blocksPerGrid = (n + threadsPerBlock - 1) // threadsPerBlock
+
+        # Allocate device memory using Driver API
+        d_A = checkCudaErrors(cu.cuMemAlloc(nbytes))
+        d_B = checkCudaErrors(cu.cuMemAlloc(nbytes))
+        d_C = checkCudaErrors(cu.cuMemAlloc(nbytes))
+
+        # Copy input data to device
+        checkCudaErrors(cu.cuMemcpyHtoD(d_A, h_A, nbytes))
+        checkCudaErrors(cu.cuMemcpyHtoD(d_B, h_B, nbytes))
+
+        # --- Run kernel ---
         print("Running kernel...")
-        # --- CORRECTED CALL ---
-        # Positional args first (ptx, name, types, *kernel_args)
-        # Keyword args last (grid_dim, block_dim)
-        output_arrays = run_ptx_kernel(
+
+        # Note: None for void pointers, explicit type for scalar parameters
+        kernelArgs = ((d_A, d_B, d_C, n), (None, None, None, ctypes.c_int))
+
+        run_ptx_kernel(
             vector_add_ptx,
             "add_vectors",
-            arg_signature,
-            # --- Kernel arguments collected by *args ---
-            a_host,  # ptr:in (float32 array)
-            b_host,  # ptr:in (float32 array)
-            c_host,  # ptr:out (float32 array)
-            np.int32(n),  # int32 scalar
-            # --- Keyword arguments ---
-            grid_dim=(blocks_per_grid,),
-            block_dim=(threads_per_block,),
+            kernelArgs[0],  # Values
+            kernelArgs[1],  # Types
+            (threadsPerBlock,),
+            (blocksPerGrid,),
         )
         print("Kernel execution complete.")
 
-        # output_arrays contains references to the modified host arrays (c_host here)
-        assert output_arrays[0] is c_host
+        # Copy results back to host
+        checkCudaErrors(cu.cuMemcpyDtoH(h_C, d_C, nbytes))
+
+        # Free device memory
+        checkCudaErrors(cu.cuMemFree(d_A))
+        checkCudaErrors(cu.cuMemFree(d_B))
+        checkCudaErrors(cu.cuMemFree(d_C))
 
         # --- Verify ---
         print("Verifying results...")
-        expected_c = a_host + b_host
-        np.testing.assert_allclose(c_host, expected_c, rtol=1e-6)
-        print("Results verified successfully!")
+        correct = True
+        for i in range(n):
+            expected = h_A[i] + h_B[i]
+            if abs(h_C[i] - expected) > 1e-7:
+                correct = False
+                print(f"Error at index {i}: {h_C[i]} != {expected}")
+                break
 
-    except CudaError as e:
-        print(f"\n*** A CUDA error occurred: {e} ***")
+        if correct:
+            print("Results verified successfully!")
+        else:
+            print("Result verification failed!")
+
+    except RuntimeError as e:
+        print(f"\n*** CUDA error: {e} ***")
     except Exception as e:
         print(f"\n*** An unexpected error occurred: {e} ***")
         import traceback

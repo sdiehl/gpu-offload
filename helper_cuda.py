@@ -1,5 +1,6 @@
-from cuda import cuda, cudart, nvrtc # type: ignore
+from cuda import cuda, cudart, nvrtc  # type: ignore
 import sys
+
 
 def checkCmdLineFlag(stringRef):
     return any(stringRef == i and k < len(sys.argv) - 1 for i, k in enumerate(sys.argv))
@@ -10,6 +11,7 @@ def getCmdLineArgumentInt(stringRef):
         if stringRef == i and k < len(sys.argv) - 1:
             return sys.argv[k + 1]
     return 0
+
 
 def _cudaGetErrorEnum(error):
     if isinstance(error, cuda.CUresult):
@@ -25,7 +27,9 @@ def _cudaGetErrorEnum(error):
 
 def checkCudaErrors(result):
     if result[0].value:
-        raise RuntimeError(f"CUDA error code={result[0].value}({_cudaGetErrorEnum(result[0])})")
+        raise RuntimeError(
+            f"CUDA error code={result[0].value}({_cudaGetErrorEnum(result[0])})"
+        )
     if len(result) == 1:
         return None
     elif len(result) == 2:
