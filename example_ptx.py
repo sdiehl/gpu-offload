@@ -3,53 +3,7 @@ import numpy as np
 from run import setup_cuda, run_ptx_kernel, cleanup_cuda, CudaError
 
 # Example PTX code for vector addition
-vector_add_ptx = """
-.version 7.0
-.target sm_75
-.address_size 64
-
-.visible .entry add_vectors(
-    .param .u64 a_ptr,
-    .param .u64 b_ptr,
-    .param .u64 c_ptr,
-    .param .u32 n_elements
-)
-{
-    .reg .pred %p;
-    .reg .u32 %tid, %n;
-    .reg .u64 %a_addr, %b_addr, %c_addr;
-    .reg .u64 %offset;
-    .reg .f32 %a_val, %b_val, %c_val;
-
-    mov.u32   %tid, %tid.x;
-    mad.lo.u32 %tid, %ctaid.x, %ntid.x, %tid;
-
-    ld.param.u32 %n, [n_elements];
-
-    setp.ge.u32 %p, %tid, %n;
-    @%p bra DONE;
-
-    ld.param.u64 %a_addr, [a_ptr];
-    ld.param.u64 %b_addr, [b_ptr];
-    ld.param.u64 %c_addr, [c_ptr];
-
-    mul.wide.u32 %offset, %tid, 4;
-
-    add.u64 %a_addr, %a_addr, %offset;
-    add.u64 %b_addr, %b_addr, %offset;
-    add.u64 %c_addr, %c_addr, %offset;
-
-    ld.global.ca.f32 %a_val, [%a_addr];
-    ld.global.ca.f32 %b_val, [%b_addr];
-
-    add.f32 %c_val, %a_val, %b_val;
-
-    st.global.wb.f32 [%c_addr], %c_val;
-
-DONE:
-    ret;
-}
-"""
+vector_add_ptx = open("example.ptx").read()
 
 if __name__ == "__main__":
     # Prepare data

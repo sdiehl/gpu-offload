@@ -1,0 +1,58 @@
+.version 7.0
+.target sm_75
+.address_size 64
+
+.visible .entry add_vectors(
+    .param .u64 a_ptr,
+    .param .u64 b_ptr,
+    .param .u64 c_ptr,
+    .param .u32 n_elements
+)
+{
+    // Register declarations
+    .reg .pred %p;
+    // Use distinct names for general-purpose registers to avoid collision with special registers
+    .reg .u32 %r_tid, %r_ctaid_x, %r_ntid_x, %n;
+    .reg .u64 %a_addr, %b_addr, %c_addr;
+    .reg .u64 %offset;
+    .reg .f32 %a_val, %b_val, %c_val;
+
+    // --- Kernel Body ---
+
+    // Load special registers into general-purpose registers first
+    mov.u32   %r_tid, %tid.x;       // Load threadIdx.x into %r_tid
+    mov.u32   %r_ctaid_x, %ctaid.x; // Load blockIdx.x into %r_ctaid_x
+    mov.u32   %r_ntid_x, %ntid.x;   // Load blockDim.x into %r_ntid_x
+
+    // Calculate global thread ID using general-purpose registers
+    mad.lo.u32 %r_tid, %r_ctaid_x, %r_ntid_x, %r_tid; // %r_tid = %r_ctaid_x * %r_ntid_x + %r_tid
+
+    // Load kernel parameters
+    ld.param.u32 %n, [n_elements];
+
+    // Bounds check using the calculated global thread ID in %r_tid
+    setp.ge.u32 %p, %r_tid, %n;
+    @%p bra DONE;
+
+    // Load base addresses
+    ld.param.u64 %a_addr, [a_ptr];
+    ld.param.u64 %b_addr, [b_ptr];
+    ld.param.u64 %c_addr, [c_ptr];
+
+    // Calculate offset using the global thread ID in %r_tid
+    mul.wide.u32 %offset, %r_tid, 4;
+
+    // Calculate final addresses
+    add.u64 %a_addr, %a_addr, %offset;
+    add.u64 %b_addr, %b_addr, %offset;
+    add.u64 %c_addr, %c_addr, %offset;
+
+    // Load, Add, Store
+    ld.global.ca.f32 %a_val, [%a_addr];
+    ld.global.ca.f32 %b_val, [%b_addr];
+    add.f32 %c_val, %a_val, %b_val;
+    st.global.wb.f32 [%c_addr], %c_val;
+
+DONE:
+    ret;
+}

@@ -1,239 +1,146 @@
-import cuda.cuda as cu
+import cuda.cuda as cu # type: ignore
 import numpy as np
-import inspect  # For error messages
+import os
+import tempfile
+import subprocess
+from helper_cuda import checkCudaErrors
 
 
-# --- CUDA Error Checking (Minimal) ---
-class CudaError(RuntimeError):
-    """Custom exception for CUDA errors."""
-
-    def __init__(self, message, cu_result):
-        super().__init__(f"{message} (CUDA Error: {cu_result})")
-        self.cu_result = cu_result
-
-
-def _check_cuda_error(err_tuple, func_name="<unknown>"):
-    """Checks CUDA Driver API error codes."""
-    if not isinstance(err_tuple, tuple):
-        # Handle cases where only the error code is returned directly
-        if isinstance(err_tuple, cu.CUresult) and err_tuple != cu.CUresult.CUDA_SUCCESS:
-            err = err_tuple
-        else:
-            return  # No error or not a CUresult
-
-    elif err_tuple[0] != cu.CUresult.CUDA_SUCCESS:
-        err = err_tuple[0]  # Error code is usually the first element
-    else:
-        return  # Success
-
-    # Error occurred, raise exception
-    try:
-        err_name = cu.cuGetErrorName(err)[1].decode("utf-8")
-    except Exception:
-        err_name = "Unknown Error Name"
-    try:
-        err_string = cu.cuGetErrorString(err)[1].decode("utf-8")
-    except Exception:
-        err_string = "Unknown Error Description"
-
-    caller = inspect.currentframe().f_back
-    caller_info = f"in '{caller.f_code.co_name}' line {caller.f_lineno}"
-    raise CudaError(
-        f"CUDA call {func_name}(...) failed {caller_info}. {err_name}: {err_string}",
-        err,
-    )
-
-
-# --- Type Mapping (Simplified) ---
-# Maps simple type names to numpy types for kernel arguments. 'ptr' is always uint64.
-# We'll enforce that 'ptr' corresponds to float32 np.ndarray elsewhere.
-_SCALAR_NP_TYPES = {
-    "int8": np.int8,
-    "uint8": np.uint8,
-    "int16": np.int16,
-    "uint16": np.uint16,
-    "int32": np.int32,
-    "uint32": np.uint32,
-    "int64": np.int64,
-    "uint64": np.uint64,
-    "float32": np.float32,
-    "float64": np.float64,
-    "ptr": np.uint64,  # PTX kernels take pointers as 64-bit unsigned integers
-}
-
-# --- Core Functions ---
-
-
-def setup_cuda(device_id: int = 0):
-    """Initializes CUDA and creates a context."""
+def setup_cuda(device_id=0):
+    """Initialize CUDA and create a context."""
     print("Initializing CUDA...")
-    _check_cuda_error(cu.cuInit(0), "cuInit")
-    err, device = cu.cuDeviceGet(device_id)
-    _check_cuda_error((err,), "cuDeviceGet")  # Wrap single return in tuple for checker
-    err, context = cu.cuCtxCreate(0, device)
-    _check_cuda_error((err,), "cuCtxCreate")
+    # Initialize CUDA
+    checkCudaErrors(cu.cuInit(0))
+    
+    # Get device
+    device = checkCudaErrors(cu.cuDeviceGet(device_id))
+    
+    # Create context
+    context = checkCudaErrors(cu.cuCtxCreate(0, device))
+    
     print(f"CUDA context created on device {device_id}.")
-    # Context is now active on the calling thread
-    return context  # Return context handle needed for cleanup
+    return context
 
 
 def run_ptx_kernel(
     ptx_code: str,
     kernel_name: str,
-    arg_types: list[str],
-    *args,  # Kernel arguments must come before named args below
-    grid_dim: tuple[int, ...],
-    block_dim: tuple[int, ...],
+    args_data: list,
+    args_types: list,
+    grid_dim: tuple,
+    block_dim: tuple
 ):
-    """Runs a PTX kernel on the GPU.
-
+    """Run a PTX kernel with simplified argument handling.
+    
     Args:
         ptx_code: String containing PTX code
         kernel_name: Name of the kernel function to call
-        arg_types: List of type strings for kernel arguments (e.g., ["ptr:in", "ptr:out", "int32"])
-        *args: Kernel arguments (numpy arrays or scalar values)
+        args_data: List of kernel arguments (numpy arrays or scalars)
+        args_types: List of ctypes types for kernel arguments
         grid_dim: Grid dimensions as tuple (e.g., (8, 1, 1))
         block_dim: Block dimensions as tuple (e.g., (128, 1, 1))
-
-    Returns:
-        List of output arrays that were modified by the kernel
     """
-    module = None
-    gpu_allocations = []  # Stores (gpu_ptr, host_array_for_output) for cleanup/copyback
-    output_arrays = []  # References to host arrays that need updating
-
-    try:
-        # 1. Load PTX Module
-        # print("Loading PTX module...")
-        err, module = cu.cuModuleLoadData(ptx_code.encode("utf-8"))
-        _check_cuda_error((err,), "cuModuleLoadData")
-
-        # 2. Get Kernel Function
-        err, kernel_func = cu.cuModuleGetFunction(module, kernel_name.encode("utf-8"))
-        _check_cuda_error((err,), "cuModuleGetFunction")
-
-        # 3. Prepare Arguments (Allocate GPU memory, Copy H->D)
-        kernel_args_list = []
-        if len(args) != len(arg_types):
-            raise ValueError(
-                f"Expected {len(arg_types)} kernel arguments (*args), got {len(args)}"
-            )
-
-        for i, (type_str, host_arg) in enumerate(zip(arg_types, args)):
-            parts = type_str.lower().split(":")
-            base_type = parts[0]
-            modifier = parts[1] if len(parts) > 1 else "in"
-
-            if base_type == "ptr":
-                if not isinstance(host_arg, np.ndarray) or host_arg.dtype != np.float32:
-                    raise TypeError(
-                        f"Arg {i}: 'ptr' type expects a float32 NumPy array, got {type(host_arg)} with dtype {getattr(host_arg, 'dtype', None)}"
-                    )
-                if not host_arg.flags["C_CONTIGUOUS"]:
-                    host_arg = np.ascontiguousarray(host_arg)  # Ensure contiguous
-
-                # Allocate GPU memory
-                err, gpu_ptr = cu.cuMemAlloc(host_arg.nbytes)
-                _check_cuda_error((err,), "cuMemAlloc")
-
-                needs_copy_to_gpu = modifier in ["in", "inout"]
-                needs_copy_back = modifier in ["out", "inout"]
-
-                # Copy Host -> Device if needed
-                if needs_copy_to_gpu:
-                    (err,) = cu.cuMemcpyHtoD(
-                        gpu_ptr, host_arg.ctypes.data, host_arg.nbytes
-                    )
-                    _check_cuda_error((err,), "cuMemcpyHtoD")
-
-                # Store pointer for kernel args and info for cleanup/copyback
-                kernel_args_list.append(_SCALAR_NP_TYPES["ptr"](gpu_ptr))
-                gpu_allocations.append((gpu_ptr, host_arg if needs_copy_back else None))
-                if needs_copy_back:
-                    output_arrays.append(host_arg)
-
-            elif base_type in _SCALAR_NP_TYPES:  # Scalar argument
-                np_type = _SCALAR_NP_TYPES[base_type]
-                try:
-                    scalar_val = np_type(host_arg)
-                except (TypeError, ValueError):
-                    raise TypeError(
-                        f"Arg {i}: Cannot convert '{host_arg}' to scalar type '{base_type}'"
-                    )
-                kernel_args_list.append(scalar_val)
-            else:
-                raise ValueError(f"Arg {i}: Unsupported base type '{base_type}'")
-
-        # 4. Launch Kernel
-        # print(f"Launching kernel '{kernel_name}'...")
-        grid = grid_dim + (1,) * (3 - len(grid_dim))
-        block = block_dim + (1,) * (3 - len(block_dim))
-
-        (err,) = cu.cuLaunchKernel(
-            kernel_func,
-            grid[0],
-            grid[1],
-            grid[2],
-            block[0],
-            block[1],
-            block[2],
-            0,
-            0,  # Shared mem bytes, stream handle (0=default)
-            args=kernel_args_list,
-        )
-        _check_cuda_error((err,), "cuLaunchKernel")
-
-        # 5. Synchronize (Wait for kernel completion)
-        (err,) = cu.cuCtxSynchronize()
-        _check_cuda_error((err,), "cuCtxSynchronize")
-        # print("Kernel finished.")
-
-        # 6. Copy Results Device -> Host
-        for gpu_ptr, host_array_out in gpu_allocations:
-            if host_array_out is not None:  # If marked for copy-back
-                # print("Copying results D->H...")
-                (err,) = cu.cuMemcpyDtoH(
-                    host_array_out.ctypes.data, gpu_ptr, host_array_out.nbytes
-                )
-                _check_cuda_error((err,), "cuMemcpyDtoH")
-
-        return output_arrays  # Return the modified host arrays
-
-    finally:
-        # 7. Cleanup Resources for this run (Memory, Module)
-        # print("Cleaning up kernel resources...")
-        for gpu_ptr, _ in gpu_allocations:
-            if gpu_ptr:
-                try:
-                    (err,) = cu.cuMemFree(gpu_ptr)
-                    # Don't check error strictly here during cleanup to ensure all attempts are made
-                    if err != cu.CUresult.CUDA_SUCCESS:
-                        print(
-                            f"Warning: cuMemFree failed for pointer {gpu_ptr} with error {err}"
-                        )
-                except Exception as e:  # Catch potential exceptions during cleanup
-                    print(
-                        f"Warning: Exception during cuMemFree for pointer {gpu_ptr}: {e}"
-                    )
-        if module:
-            try:
-                (err,) = cu.cuModuleUnload(module)
-                if err != cu.CUresult.CUDA_SUCCESS:
-                    print(f"Warning: cuModuleUnload failed with error {err}")
-            except Exception as e:
-                print(f"Warning: Exception during cuModuleUnload: {e}")
+    # Load the PTX module
+    module = checkCudaErrors(cu.cuModuleLoadData(ptx_code.encode("utf-8")))
+    
+    # Get kernel function
+    kernel_func = checkCudaErrors(cu.cuModuleGetFunction(module, kernel_name.encode("utf-8")))
+    
+    # Prepare kernel arguments
+    kernel_args = (tuple(args_data), tuple(args_types))
+    
+    # Prepare grid and block dimensions
+    grid = tuple(int(x) for x in grid_dim) + (1,) * (3 - len(grid_dim))
+    block = tuple(int(x) for x in block_dim) + (1,) * (3 - len(block_dim))
+    
+    # Launch the kernel
+    checkCudaErrors(cu.cuLaunchKernel(
+        kernel_func,
+        grid[0], grid[1], grid[2],
+        block[0], block[1], block[2],
+        0,                     # shared memory bytes
+        0,                     # stream
+        kernel_args,
+        0                      # extra
+    ))
+    
+    # Synchronize to ensure kernel completion
+    checkCudaErrors(cu.cuCtxSynchronize())
+    
+    # Unload module when done
+    checkCudaErrors(cu.cuModuleUnload(module))
 
 
 def cleanup_cuda(context):
-    """Destroys the CUDA context."""
+    """Destroy the CUDA context."""
     if context:
         print("Destroying CUDA context...")
-        try:
-            (err,) = cu.cuCtxDestroy(context)
-            # Don't check error strictly during cleanup
-            if err != cu.CUresult.CUDA_SUCCESS:
-                print(f"Warning: cuCtxDestroy failed with error {err}")
-            else:
-                print("CUDA context destroyed.")
-        except Exception as e:
-            print(f"Warning: Unexpected error during context destruction: {e}")
+        checkCudaErrors(cu.cuCtxDestroy(context))
+        print("CUDA context destroyed.")
+
+
+def verify_ptx(ptx_code: str, arch: int = 75) -> bool:
+    """Verify PTX code using the NVIDIA PTX assembler (ptxas)."""
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.ptx', delete=False) as temp_file:
+            temp_file_path = temp_file.name
+            temp_file.write(ptx_code.encode('utf-8'))
+            
+        cmd = ["ptxas", f"-arch=sm_{arch}", temp_file_path]
+        result = subprocess.run(
+            cmd, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False
+        )
+        
+        if result.returncode == 0:
+            print(f"PTX verification successful (SM_{arch}).")
+            return True
+        else:
+            print(f"PTX verification failed (SM_{arch}):")
+            print(result.stderr)
+            return False
+            
+    except FileNotFoundError:
+        print("Error: ptxas command not found. Ensure CUDA toolkit is installed and in PATH.")
+        return False
+    except Exception as e:
+        print(f"Error during PTX verification: {str(e)}")
+        return False
+    finally:
+        if 'temp_file_path' in locals():
+            try:
+                os.unlink(temp_file_path)
+            except Exception:
+                pass
+
+
+# Helper function for allocating and managing device memory
+def cuda_malloc_and_copy(host_array):
+    """Allocate GPU memory and copy data from host to device."""
+    if not isinstance(host_array, np.ndarray):
+        raise TypeError(f"Expected numpy array, got {type(host_array)}")
+    
+    # Ensure contiguous array
+    if not host_array.flags["C_CONTIGUOUS"]:
+        host_array = np.ascontiguousarray(host_array)
+    
+    # Allocate GPU memory
+    device_ptr = checkCudaErrors(cu.cuMemAlloc(host_array.nbytes))
+    
+    # Copy data from host to device
+    checkCudaErrors(cu.cuMemcpyHtoD(device_ptr, host_array.ctypes.data, host_array.nbytes))
+    
+    return device_ptr, host_array.nbytes
+
+
+def cuda_memcpy_device_to_host(device_ptr, host_array):
+    """Copy data from device to host."""
+    checkCudaErrors(cu.cuMemcpyDtoH(host_array.ctypes.data, device_ptr, host_array.nbytes))
+
+
+def cuda_free(device_ptr):
+    """Free GPU memory."""
+    checkCudaErrors(cu.cuMemFree(device_ptr))
