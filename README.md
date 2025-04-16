@@ -8,7 +8,7 @@ This is a minimal demonstration of compiling MLIR code to PTX and executing it o
 
 To run the example in Google Colab, click the badge below. Launch an instance with a NVIDIA GPU like a T4 (`sm_75`) or A100 (`sm_80`).
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1zCkNPspT4cprq0Nv42bzf8XIVjqHR3NT?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sdiehl/gpu-offload/blob/main/Minimal.ipynb)
 
 Or load the following notebook in your local environment.
 

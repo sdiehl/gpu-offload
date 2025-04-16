@@ -257,8 +257,8 @@ try:
     args = [
         0,  # Grid dimension offset
         0,  # Block dimension offset
-        d_input,      # Input pointer
-        d_output      # Output pointer
+        d_input,  # Input pointer
+        d_output,  # Output pointer
     ]
     arg_types = [ctypes.c_int, ctypes.c_int, None, None]  # Using None for pointer types
 
