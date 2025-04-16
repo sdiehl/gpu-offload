@@ -3,6 +3,7 @@ name = "gpu-offload"
 version = "0.1.0"
 description = "Minimal example of using MLIR to compile to PTX and evaluate on the GPU"
 authors = ["sdiehl <stephen.m.diehl@gmail.com>"]
+license = "MIT"
 readme = "README.md"
 package-mode = false
 

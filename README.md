@@ -1,6 +1,6 @@
 # MLIR to PTX
 
-This is a minimal demonstration of compiling MLIR code to PTX and executing it on an NVIDIA GPU using Python MLIR bindings and Python CUDA bindings.
+This is a minimal demonstration of compiling MLIR code to PTX and executing it on an NVIDIA GPU using Python MLIR bindings and Python CUDA bindings. Notably we're going straight to PTX from high-level tensor operations expressed in MLIR without using `nvcc` or emitting C++ code.
 
 - [`compile.py`](./compile.py): Functions for compiling MLIR to PTX
 - [`run.py`](./run.py): Functions for running PTX kernels on GPU
@@ -77,13 +77,17 @@ with CudaContext() as ctx:
 
 ## Running the Examples
 
+To run the other examples, see the [examples](./examples) directory.
+
 ```bash
-poetry run python examples/example_mlir.py
-poetry run python examples/example_ptx.py
-poetry run python examples/example_full.py
+poetry run python examples/example_mlir.py    # Generate MLIR from high-level tensor operations
+poetry run python examples/example_ptx.py     # Compile MLIR to PTX
+poetry run python examples/example_full.py    # Full pipeline from MLIR to execution
 ```
 
 ## Pipeline
+
+The following is a step-by-step breakdown of the pipeline used to compile the MLIR module to PTX in terms of [MLIR Passes](https://mlir.llvm.org/docs/Passes/).
 
 Start MLIR module.
 
