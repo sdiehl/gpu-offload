@@ -12,7 +12,7 @@ To run the example in Google Colab, click the badge below. Launch an instance wi
 
 Or load the following notebook in your local environment.
 
-* [Minimal.ipynb](./minimal.ipynb)
+* [Minimal.ipynb](./Minimal.ipynb)
 * [minimal.py](./minimal.py)
 
 ## Installation
@@ -429,6 +429,46 @@ module attributes {gpu.container_module} {
 }
 ```
 
+After `mlir-translate --mlir-to-llvmir`.
+
+```llvm
+; ModuleID = 'LLVMDialectModule'
+source_filename = "LLVMDialectModule"
+
+define void @square_kernel(i64 %0, i64 %1, ptr %2, ptr %3) {
+  %5 = call i32 @llvm.nvvm.read.ptx.sreg.ctaid.x()
+  %6 = sext i32 %5 to i64
+  %7 = call i32 @llvm.nvvm.read.ptx.sreg.tid.x()
+  %8 = sext i32 %7 to i64
+  %9 = add i64 %0, %6
+  %10 = add i64 %1, %8
+  %11 = mul i64 %9, 10
+  %12 = add i64 %11, %10
+  %13 = getelementptr float, ptr %2, i64 %12
+  %14 = load float, ptr %13, align 4
+  %15 = fmul float %14, %14
+  %16 = mul i64 %9, 10
+  %17 = add i64 %16, %10
+  %18 = getelementptr float, ptr %3, i64 %17
+  store float %15, ptr %18, align 4
+  ret void
+}
+
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+declare noundef i32 @llvm.nvvm.read.ptx.sreg.ctaid.x() #0
+
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+declare noundef i32 @llvm.nvvm.read.ptx.sreg.tid.x() #0
+
+attributes #0 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+
+!llvm.module.flags = !{!0}
+!nvvm.annotations = !{!1}
+
+!0 = !{i32 2, !"Debug Info Version", i32 3}
+!1 = !{ptr @square_kernel, !"kernel", i32 1}
+```
+
 After `llc -march=nvptx64 -mcpu=sm_90`.
 
 ```asm
@@ -478,4 +518,52 @@ After `llc -march=nvptx64 -mcpu=sm_90`.
                                         // -- End function
 }
 
+```
+
+After `ptxas -arch=sm_90`.
+
+```asm
+square_kernel:
+ LDC R1, c[0x0][0x28] 
+ S2R R3, SR_TID.X 
+ LDC.64 R6, c[0x0][0x210] 
+ ULDC.64 UR4, c[0x0][0x218] 
+ ULDC.64 UR6, c[0x0][0x228] 
+ S2R R0, SR_CTAID.X 
+ IADD3 R2, P1, R3, UR4, RZ 
+ IADD3 R5, P0, R0.reuse, R6, RZ 
+ LEA.HI.X.SX32 R3, R3, UR5, 0x1, P1 
+ ULDC.64 UR4, c[0x0][0x220] 
+ LEA.HI.X.SX32 R0, R0, R7, 0x1, P0 
+ IMAD.WIDE.U32 R2, R5, 0xa, R2 
+ IMAD R7, R0, 0xa, RZ 
+ IMAD.SHL.U32 R4, R2, 0x4, RZ 
+ IMAD.IADD R3, R3, 0x1, R7 
+ SHF.L.U64.HI R0, R2, 0x2, R3 
+ IADD3 R2, P0, R4, UR4, RZ 
+ IADD3.X R3, R0, UR5, RZ, P0, !PT 
+ ULDC.64 UR4, c[0x0][0x208] 
+ LDG.E R2, desc[UR4][R2.64] 
+ IADD3 R4, P0, R4, UR6, RZ 
+ IADD3.X R5, R0, UR7, RZ, P0, !PT 
+ FMUL R7, R2, R2 
+ STG.E desc[UR4][R4.64], R7 
+ EXIT 
+.L_x_0:
+ BRA `(.L_x_0)
+ NOP
+ NOP
+ NOP
+ NOP
+ NOP
+ NOP
+ NOP
+ NOP
+ NOP
+ NOP
+ NOP
+ NOP
+ NOP
+ NOP
+.L_x_1:
 ```
