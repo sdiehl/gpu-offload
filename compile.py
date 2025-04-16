@@ -4,7 +4,7 @@ from mlir.ir import Context, Module
 from mlir.passmanager import PassManager
 
 
-def compile_mlir_to_ptx(mlir_module_str: str, chip_type="sm_90"):
+def compile_mlir_to_ptx(mlir_module_str: str, chip_type="sm_75"):
     """Compiles MLIR module string to PTX code."""
     with Context():
         # Parse the input module
@@ -19,7 +19,7 @@ def compile_mlir_to_ptx(mlir_module_str: str, chip_type="sm_90"):
     return ptx
 
 
-def apply_gpu_pipeline(module, chip_type="sm_90"):
+def apply_gpu_pipeline(module, chip_type="sm_75"):
     """Applies the GPU compilation pipeline to the MLIR module."""
     pm = PassManager()
     pm.enable_ir_printing(print_after_change=True)
@@ -67,7 +67,7 @@ def extract_gpu_module(module: Module) -> Module:
         raise RuntimeError(f"Failed to extract GPU module: {e}") from e
 
 
-def generate_ptx(gpu_module_str, chip_type="sm_90"):
+def generate_ptx(gpu_module_str, chip_type="sm_75"):
     """Generates PTX from an MLIR GPU module string."""
     # First convert MLIR to LLVM IR
     llvm_ir_result = subprocess.run(
