@@ -1,8 +1,12 @@
+import sys
+
+sys.path.append(".")
+
 import numpy as np
 from run import CudaContext
 
 # Define PTX code for matrix multiplication
-matrix_multiply_ptx = open("matmul.ptx").read()
+matrix_multiply_ptx = open("examples/matmul.ptx").read()
 
 # Matrix dimensions
 N = 64  # Rows of A

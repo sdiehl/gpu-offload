@@ -1,8 +1,12 @@
+import sys
+
+sys.path.append(".")
+
 import numpy as np
 from run import CudaContext
 
 # Example PTX code for vector addition
-vector_add_ptx = open("example.ptx").read()
+vector_add_ptx = open("examples/vecAdd.ptx").read()
 
 # Prepare data
 n = 10000

@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append(".")
+
 from compile import compile_mlir_to_ptx
 
 # Example MLIR module for a matrix squaring operation
