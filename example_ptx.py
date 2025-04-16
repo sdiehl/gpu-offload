@@ -1,89 +1,50 @@
 import numpy as np
-import ctypes
-from run import setup_cuda, run_ptx_kernel, cleanup_cuda
-from helper_cuda import checkCudaErrors
-import cuda.cuda as cu  # type: ignore
+from run import CudaContext
 
 # Example PTX code for vector addition
 vector_add_ptx = open("example.ptx").read()
 
-if __name__ == "__main__":
-    # Prepare data
-    n = 10000
-    cuda_context = None  # Ensure cleanup happens even if setup fails
+# Prepare data
+n = 10000
 
-    try:
-        # --- Setup ---
-        cuda_context = setup_cuda()
+# Using context manager for automatic resource management
+with CudaContext() as ctx:
+    print("CUDA initialized. Running vector addition example...")
 
-        # Allocate memory normally - we'll use Driver API only
-        h_A = np.random.rand(n).astype(dtype=np.float32)
-        h_B = np.random.rand(n).astype(dtype=np.float32)
-        h_C = np.zeros(n, dtype=np.float32)
-        nbytes = n * np.dtype(np.float32).itemsize
+    # Prepare input arrays
+    h_A = np.random.rand(n).astype(dtype=np.float32)
+    h_B = np.random.rand(n).astype(dtype=np.float32)
 
-        # --- Define kernel dimensions ---
-        threadsPerBlock = 128
-        blocksPerGrid = (n + threadsPerBlock - 1) // threadsPerBlock
+    # Create CudaArray objects using the context - these handle memory allocation and transfers
+    d_A = ctx.array(h_A)
+    d_B = ctx.array(h_B)
+    d_C = ctx.array(shape=n, dtype=np.float32)  # Empty output array
 
-        # Allocate device memory using Driver API
-        d_A = checkCudaErrors(cu.cuMemAlloc(nbytes))
-        d_B = checkCudaErrors(cu.cuMemAlloc(nbytes))
-        d_C = checkCudaErrors(cu.cuMemAlloc(nbytes))
+    # Run kernel
+    print("Running kernel...")
+    ctx.run_kernel(
+        vector_add_ptx, "add_vectors", [d_A, d_B, d_C, n], n=n, block_dims=(128, 1, 1)
+    )
 
-        # Copy input data to device
-        checkCudaErrors(cu.cuMemcpyHtoD(d_A, h_A, nbytes))
-        checkCudaErrors(cu.cuMemcpyHtoD(d_B, h_B, nbytes))
+    print("Kernel execution complete.")
 
-        # --- Run kernel ---
-        print("Running kernel...")
+    # Copy results back to host
+    d_C.copy_device_to_host()
+    h_C = d_C.host_array
 
-        # Note: None for void pointers, explicit type for scalar parameters
-        kernelArgs = ((d_A, d_B, d_C, n), (None, None, None, ctypes.c_int))
+    # Memory will be automatically freed when context exits
 
-        run_ptx_kernel(
-            vector_add_ptx,
-            "add_vectors",
-            kernelArgs[0],  # Values
-            kernelArgs[1],  # Types
-            (threadsPerBlock,),
-            (blocksPerGrid,),
-        )
-        print("Kernel execution complete.")
+    # --- Verify ---
+    print("Verifying results...")
+    correct = True
+    for i in range(n):
+        expected = h_A[i] + h_B[i]
+        if abs(h_C[i] - expected) > 1e-7:
+            correct = False
+            print(f"Error at index {i}: {h_C[i]} != {expected}")
+            break
 
-        # Copy results back to host
-        checkCudaErrors(cu.cuMemcpyDtoH(h_C, d_C, nbytes))
-
-        # Free device memory
-        checkCudaErrors(cu.cuMemFree(d_A))
-        checkCudaErrors(cu.cuMemFree(d_B))
-        checkCudaErrors(cu.cuMemFree(d_C))
-
-        # --- Verify ---
-        print("Verifying results...")
-        correct = True
-        for i in range(n):
-            expected = h_A[i] + h_B[i]
-            if abs(h_C[i] - expected) > 1e-7:
-                correct = False
-                print(f"Error at index {i}: {h_C[i]} != {expected}")
-                break
-
-        if correct:
-            print("Results verified successfully!")
-        else:
-            print("Result verification failed!")
-
-    except RuntimeError as e:
-        print(f"\n*** CUDA error: {e} ***")
-    except Exception as e:
-        print(f"\n*** An unexpected error occurred: {e} ***")
-        import traceback
-
-        traceback.print_exc()  # Print stack trace for unexpected errors
-    finally:
-        # --- Cleanup ---
-        if cuda_context:
-            cleanup_cuda(cuda_context)
-
-    print("Example finished.")
+    if correct:
+        print("Results verified successfully!")
+    else:
+        print("Result verification failed!")

@@ -1,5 +1,6 @@
 from cuda import cuda, cudart, nvrtc  # type: ignore
 
+
 def _cudaGetErrorEnum(error):
     if isinstance(error, cuda.CUresult):
         err, name = cuda.cuGetErrorName(error)
