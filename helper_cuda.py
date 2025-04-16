@@ -1,17 +1,4 @@
 from cuda import cuda, cudart, nvrtc  # type: ignore
-import sys
-
-
-def checkCmdLineFlag(stringRef):
-    return any(stringRef == i and k < len(sys.argv) - 1 for i, k in enumerate(sys.argv))
-
-
-def getCmdLineArgumentInt(stringRef):
-    for i, k in enumerate(sys.argv):
-        if stringRef == i and k < len(sys.argv) - 1:
-            return sys.argv[k + 1]
-    return 0
-
 
 def _cudaGetErrorEnum(error):
     if isinstance(error, cuda.CUresult):
@@ -40,16 +27,12 @@ def checkCudaErrors(result):
 
 def findCudaDevice():
     devID = 0
-    if checkCmdLineFlag("device="):
-        devID = getCmdLineArgumentInt("device=")
     checkCudaErrors(cudart.cudaSetDevice(devID))
     return devID
 
 
 def findCudaDeviceDRV():
     devID = 0
-    if checkCmdLineFlag("device="):
-        devID = getCmdLineArgumentInt("device=")
     checkCudaErrors(cuda.cuInit(0))
     cuDevice = checkCudaErrors(cuda.cuDeviceGet(devID))
     return cuDevice
