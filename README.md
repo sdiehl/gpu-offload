@@ -3,7 +3,8 @@
 This is a minimal demonstration of compiling MLIR code to PTX and executing it on an NVIDIA GPU using Python MLIR bindings and Python CUDA bindings.
 
 - `compile.py`: Functions for compiling MLIR to PTX
-- `run.py`: Functions for running PTX kernels on CUDA GPUs
+- `run.py`: Functions for running PTX kernels on GPU
+- `verify.py`: Verify the PTX code
 
 To run the example in Google Colab, click the badge below. Launch an instance with a NVIDIA GPU like a T4 (`sm_75`) or A100 (`sm_80`).
 
@@ -26,9 +27,9 @@ XXX: TODO
 ## Running the Example
 
 ```bash
-poetry run python example.py
-poetry run python example_mlir.py
-poetry run python example_ptx.py
+poetry run python examples/example_mlir.py
+poetry run python examples/example_ptx.py
+poetry run python examples/example_full.py
 ```
 
 

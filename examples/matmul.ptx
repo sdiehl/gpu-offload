@@ -1,0 +1,91 @@
+.version 7.0
+.target sm_75
+.address_size 64
+
+.visible .entry matrixMul(
+    .param .u64 A_ptr,
+    .param .u64 B_ptr,
+    .param .u64 C_ptr,
+    .param .u32 N,
+    .param .u32 M,
+    .param .u32 K
+)
+{
+    // Register declarations
+    .reg .pred %p;
+    .reg .u32 %row, %col, %k;
+    .reg .u32 %r_tid, %r_ntid_x, %r_ctaid_x, %r_ctaid_y;
+    .reg .u32 %N, %M, %K;
+    .reg .u64 %A_ptr, %B_ptr, %C_ptr;
+    .reg .u64 %a_idx, %b_idx, %c_idx;
+    .reg .f32 %a_val, %b_val, %sum;
+
+    // Load thread indices
+    mov.u32 %r_tid, %tid.x;        // threadIdx.x
+    mov.u32 %r_ntid_x, %ntid.x;    // blockDim.x  
+    mov.u32 %r_ctaid_x, %ctaid.x;  // blockIdx.x
+    mov.u32 %r_ctaid_y, %ctaid.y;  // blockIdx.y
+
+    // Load kernel parameters
+    ld.param.u64 %A_ptr, [A_ptr];
+    ld.param.u64 %B_ptr, [B_ptr];
+    ld.param.u64 %C_ptr, [C_ptr];
+    ld.param.u32 %N, [N];
+    ld.param.u32 %M, [M];
+    ld.param.u32 %K, [K];
+
+    // Calculate row and column
+    mov.u32 %row, %r_ctaid_y;
+    mad.lo.u32 %col, %r_ctaid_x, %r_ntid_x, %r_tid;
+    
+    // Bounds check
+    setp.ge.u32 %p, %row, %N;
+    @%p bra DONE;
+    setp.ge.u32 %p, %col, %M;
+    @%p bra DONE;
+    
+    // Initialize sum
+    mov.f32 %sum, 0.0;
+    
+    // Loop over K dimension
+    mov.u32 %k, 0;
+LOOP:
+    setp.ge.u32 %p, %k, %K;
+    @%p bra ENDLOOP;
+    
+    // Calculate A address: A[row*K + k]
+    mul.lo.u32 %a_idx, %row, %K;
+    add.u32 %a_idx, %a_idx, %k;
+    mul.wide.u32 %a_idx, %a_idx, 4;
+    add.u64 %a_idx, %A_ptr, %a_idx;
+    
+    // Calculate B address: B[k*M + col]
+    mul.lo.u32 %b_idx, %k, %M;
+    add.u32 %b_idx, %b_idx, %col;
+    mul.wide.u32 %b_idx, %b_idx, 4;
+    add.u64 %b_idx, %B_ptr, %b_idx;
+    
+    // Load values
+    ld.global.ca.f32 %a_val, [%a_idx];
+    ld.global.ca.f32 %b_val, [%b_idx];
+    
+    // Multiply and accumulate
+    fma.rn.f32 %sum, %a_val, %b_val, %sum;
+    
+    // Increment k and continue loop
+    add.u32 %k, %k, 1;
+    bra LOOP;
+    
+ENDLOOP:
+    // Calculate C address: C[row*M + col]
+    mul.lo.u32 %c_idx, %row, %M;
+    add.u32 %c_idx, %c_idx, %col;
+    mul.wide.u32 %c_idx, %c_idx, 4;
+    add.u64 %c_idx, %C_ptr, %c_idx;
+    
+    // Store result
+    st.global.wb.f32 [%c_idx], %sum;
+    
+DONE:
+    ret;
+}
