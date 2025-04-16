@@ -5,6 +5,10 @@ This minimal project demonstrates how to compile MLIR code to PTX and execute it
 - `compile.py`: Functions for compiling MLIR to PTX
 - `run.py`: Functions for running PTX kernels on CUDA GPUs
 
+To run the example in Google Colab, click the badge below.
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1zCkNPspT4cprq0Nv42bzf8XIVjqHR3NT?usp=sharing)
+
 ## Installation
 
 ```bash
