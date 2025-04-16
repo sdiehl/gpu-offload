@@ -1,3 +1,4 @@
+import ctypes
 import numpy as np
 import cuda.cuda as cu  # type: ignore
 import cuda.cudart as cudart  # type: ignore
@@ -242,12 +243,24 @@ try:
     copy_host_to_device(input_data, d_input)
 
     # Run kernel
-    grid_dims = ((size * size + 255) // 256, 1, 1)
-    block_dims = (256, 1, 1)
+    grid_dims = (size, 1, 1)  # One thread block per row
+    block_dims = (size, 1, 1)  # One thread per column
 
-    # Prepare arguments
-    args = [d_input, d_output]
-    arg_types = [None, None]  # Using None for pointer types
+    # Prepare arguments according to the PTX code
+    # From the PTX:
+    # square_kernel(
+    #     .param .u64 square_kernel_param_0,          // Grid dimension offset
+    #     .param .u64 square_kernel_param_1,          // Block dimension offset
+    #     .param .u64 .ptr .align 1 square_kernel_param_2,  // Input pointer
+    #     .param .u64 .ptr .align 1 square_kernel_param_3   // Output pointer
+    # )
+    args = [
+        0,  # Grid dimension offset
+        0,  # Block dimension offset
+        d_input,      # Input pointer
+        d_output      # Output pointer
+    ]
+    arg_types = [ctypes.c_int, ctypes.c_int, None, None]  # Using None for pointer types
 
     print("Running kernel on GPU...")
     run_kernel(
