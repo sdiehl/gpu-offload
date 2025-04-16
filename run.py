@@ -1,20 +1,60 @@
 import cuda.cuda as cu  # type: ignore
+import cuda.cudart as cudart  # type: ignore
+import cuda.nvrtc as nvrtc  # type: ignore
 import numpy as np
-import os
-import tempfile
-import subprocess
 import ctypes
-from helper_cuda import checkCudaErrors
 
 
-def setup_cuda(device_id=0):
+def _cudaGetErrorEnum(error):
+    if isinstance(error, cu.CUresult):
+        err, name = cu.cuGetErrorName(error)
+        return name if err == cu.CUresult.CUDA_SUCCESS else "<unknown>"
+    elif isinstance(error, cudart.cudaError_t):
+        return cudart.cudaGetErrorName(error)[1]
+    elif isinstance(error, nvrtc.nvrtcResult):
+        return nvrtc.nvrtcGetErrorString(error)[1]
+    else:
+        raise RuntimeError(f"Unknown error type: {error}")
+
+
+def checkCudaErrors(result):
+    if result[0].value:
+        raise RuntimeError(
+            f"CUDA error code={result[0].value}({_cudaGetErrorEnum(result[0])})"
+        )
+    if len(result) == 1:
+        return None
+    elif len(result) == 2:
+        return result[1]
+    else:
+        return result[1:]
+
+
+def findCudaDevice():
+    devID = 0
+    checkCudaErrors(cudart.cudaSetDevice(devID))
+    return devID
+
+
+def findCudaDeviceDRV():
+    devID = 0
+    checkCudaErrors(cu.cuInit(0))
+    cuDevice = checkCudaErrors(cu.cuDeviceGet(devID))
+    return cuDevice
+
+
+def setup_cuda(device_id=None):
     """Initialize CUDA and create a context."""
     print("Initializing CUDA...")
     # Initialize CUDA
     checkCudaErrors(cu.cuInit(0))
 
     # Get device
-    device = checkCudaErrors(cu.cuDeviceGet(device_id))
+    if device_id is None:
+        device = findCudaDeviceDRV()
+        device_id = 0  # For printing purposes
+    else:
+        device = checkCudaErrors(cu.cuDeviceGet(device_id))
 
     # Create context
     context = checkCudaErrors(cu.cuCtxCreate(0, device))
@@ -29,38 +69,6 @@ def cleanup_cuda(context):
         print("Destroying CUDA context...")
         checkCudaErrors(cu.cuCtxDestroy(context))
         print("CUDA context destroyed.")
-
-
-def verify_ptx(ptx_code: str, chip_type: str = "sm_75") -> bool:
-    """Verify PTX code using the NVIDIA PTX assembler (ptxas)."""
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".ptx", delete=False) as temp_file:
-            temp_file_path = temp_file.name
-            temp_file.write(ptx_code.encode("utf-8"))
-
-        cmd = ["ptxas", f"-arch={chip_type}", temp_file_path]
-        result = subprocess.run(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False
-        )
-
-        if result.returncode == 0:
-            print(f"PTX verification successful ({chip_type}).")
-            return True
-        else:
-            print(f"PTX verification failed ({chip_type}):")
-            print(result.stderr)
-            return False
-
-    except FileNotFoundError:
-        print(
-            "Error: ptxas command not found. Ensure CUDA toolkit is installed and in PATH."
-        )
-        return False
-    except Exception as e:
-        print(f"Error during PTX verification: {str(e)}")
-        return False
-    finally:
-        os.unlink(temp_file_path)
 
 
 class CudaArray:

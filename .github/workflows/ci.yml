@@ -51,4 +51,4 @@ jobs:
 
     - name: Run MLIR Example
       run: |
-        poetry run python example_mlir.py
+        poetry run python examples/example_mlir.py

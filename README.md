@@ -26,9 +26,9 @@ XXX: TODO
 ## Running the Example
 
 ```bash
-poetry run python example.py
-poetry run python example_mlir.py
-poetry run python example_ptx.py
+poetry run python examples/example_mlir.py
+poetry run python examples/example_ptx.py
+poetry run python examples/example_full.py
 ```
 
 
